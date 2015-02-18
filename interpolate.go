@@ -95,6 +95,10 @@ func New(s string) (*Template, error) {
 		return nil, fmt.Errorf("missing '}'")
 	}
 
+	if state == sLit && len(buf) > 0 {
+		tmpl.nodes = append(tmpl.nodes, &literal{buf})
+	}
+
 	return tmpl, nil
 }
 

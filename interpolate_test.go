@@ -80,6 +80,15 @@ func TestEvalTooLong(t *testing.T) {
 	assert.Equal(t, `invalid value at path name.first.whatever.stuff.here.whoop`, err.Error())
 }
 
+func TestEvalTrailingLit(t *testing.T) {
+	tmpl, err := New(`stream:project:{projectId}:ingress`)
+	assert.Equal(t, nil, err)
+
+	s, err := tmpl.Eval(map[string]interface{}{"projectId": "1234"})
+	assert.Equal(t, nil, err)
+	assert.Equal(t, `stream:project:1234:ingress`, s)
+}
+
 func BenchmarkParse(t *testing.B) {
 	for i := 0; i < t.N; i++ {
 		New(`Hello {name.first} {name.last} you are {color}`)
