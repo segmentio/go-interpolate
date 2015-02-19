@@ -18,6 +18,7 @@ Node represents a literal or interpolated node.
 
 ```go
 type Template struct {
+	nodes []Node
 }
 ```
 
