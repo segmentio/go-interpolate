@@ -6,6 +6,27 @@ import (
 	"strings"
 )
 
+type Getter interface {
+	Get(k string) (string, error)
+}
+
+type mapGetter map[string]interface{}
+
+func (m mapGetter) Get(path string) (string, error) {
+	var v interface{}
+	v = map[string]interface{}(m)
+
+	for _, key := range strings.Split(path, ".") {
+		if m, ok := v.(map[string]interface{}); ok {
+			v = m[key]
+		} else {
+			return "", fmt.Errorf("invalid value at path %v", path)
+		}
+	}
+
+	return v.(string), nil
+}
+
 // TODO: unicode
 // TODO: more types
 
@@ -21,42 +42,23 @@ type literal struct {
 }
 
 // Value of literal node.
-func (n *literal) Value(v interface{}) (string, error) {
+func (n *literal) Value(g Getter) (string, error) {
 	return n.text, nil
 }
 
 // Variable node.
 type variable struct {
-	path []string
-}
-
-// Get value from interface at the variable's path.
-func (n *variable) get(v interface{}) interface{} {
-	for _, key := range n.path {
-		if m, ok := v.(map[string]interface{}); ok {
-			v = m[key]
-		} else {
-			return nil
-		}
-	}
-	return v
+	path string
 }
 
 // Value of interpolated variable.
-func (n *variable) Value(v interface{}) (string, error) {
-	v = n.get(v)
-	switch v.(type) {
-	case string:
-		return v.(string), nil
-	default:
-		path := strings.Join(n.path, ".")
-		return "", fmt.Errorf("invalid value at path %v", path)
-	}
+func (n *variable) Value(g Getter) (string, error) {
+	return g.Get(n.path)
 }
 
 // Node represents a literal or interpolated node.
 type Node interface {
-	Value(v interface{}) (string, error)
+	Value(g Getter) (string, error)
 }
 
 // Template represents a series of literal and interpolated nodes.
@@ -84,8 +86,7 @@ func New(s string) (*Template, error) {
 		case sVar:
 			switch s[i] {
 			case '}':
-				path := strings.Split(buf.String(), ".")
-				tmpl.nodes = append(tmpl.nodes, &variable{path})
+				tmpl.nodes = append(tmpl.nodes, &variable{buf.String()})
 				state = sLit
 				buf = new(bytes.Buffer)
 			default:
@@ -108,10 +109,22 @@ func New(s string) (*Template, error) {
 // Eval evalutes the given value against the template,
 // returning an error if there's a path mismatch.
 func (t *Template) Eval(v interface{}) (string, error) {
+	switch v.(type) {
+	case map[string]interface{}:
+		return t.EvalWith(mapGetter(v.(map[string]interface{})))
+	default:
+		return t.EvalWith(nil)
+	}
+
+}
+
+// Eval evalutes the given value against the template,
+// returning an error if there's a path mismatch.
+func (t *Template) EvalWith(g Getter) (string, error) {
 	var buf bytes.Buffer
 
 	for _, node := range t.nodes {
-		ret, err := node.Value(v)
+		ret, err := node.Value(g)
 		if err != nil {
 			return "", err
 		}
