@@ -1,7 +1,10 @@
 package interpolate
 
-import "strings"
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+	"strings"
+)
 
 // TODO: unicode
 // TODO: more types
@@ -65,28 +68,28 @@ type Template struct {
 func New(s string) (*Template, error) {
 	tmpl := new(Template)
 	state := sLit
-	buf := ""
+	buf := new(bytes.Buffer)
 
 	for i := 0; i < len(s); i++ {
 		switch state {
 		case sLit:
 			switch s[i] {
 			case '{':
-				tmpl.nodes = append(tmpl.nodes, &literal{buf})
+				tmpl.nodes = append(tmpl.nodes, &literal{buf.String()})
 				state = sVar
-				buf = ""
+				buf = new(bytes.Buffer)
 			default:
-				buf += string(s[i])
+				buf.WriteByte(s[i])
 			}
 		case sVar:
 			switch s[i] {
 			case '}':
-				path := strings.Split(buf, ".")
+				path := strings.Split(buf.String(), ".")
 				tmpl.nodes = append(tmpl.nodes, &variable{path})
 				state = sLit
-				buf = ""
+				buf = new(bytes.Buffer)
 			default:
-				buf += string(s[i])
+				buf.WriteByte(s[i])
 			}
 		}
 	}
@@ -95,8 +98,8 @@ func New(s string) (*Template, error) {
 		return nil, fmt.Errorf("missing '}'")
 	}
 
-	if state == sLit && len(buf) > 0 {
-		tmpl.nodes = append(tmpl.nodes, &literal{buf})
+	if state == sLit && buf.Len() > 0 {
+		tmpl.nodes = append(tmpl.nodes, &literal{buf.String()})
 	}
 
 	return tmpl, nil
@@ -105,15 +108,15 @@ func New(s string) (*Template, error) {
 // Eval evalutes the given value against the template,
 // returning an error if there's a path mismatch.
 func (t *Template) Eval(v interface{}) (string, error) {
-	var s string
+	var buf bytes.Buffer
 
 	for _, node := range t.nodes {
 		ret, err := node.Value(v)
 		if err != nil {
 			return "", err
 		}
-		s += ret
+		buf.WriteString(ret)
 	}
 
-	return s, nil
+	return buf.String(), nil
 }
